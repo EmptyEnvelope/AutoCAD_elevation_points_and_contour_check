@@ -7,8 +7,8 @@
     <ProjectGuid>{DE8D8CE0-D84F-4FBA-8A79-077124DD1D4D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>高程点检测</RootNamespace>
-    <AssemblyName>高程点检测</AssemblyName>
+    <RootNamespace>ContourCheckPlugin</RootNamespace>
+    <AssemblyName>ContourCheckPlugin</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
@@ -46,7 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="高程点检测.cs" />
+    <Compile Include="ContourCheckPlugin.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
