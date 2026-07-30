@@ -10,7 +10,7 @@ using Autodesk.AutoCAD.EditorInput;
 
 namespace ContourCheckPlugin
 {
-    // 纯 C# 内存数据结构 (多线程安全)
+    // 内存数据结构
     public class ContourDTO
     {
         public ObjectId Id { get; set; }
@@ -34,7 +34,7 @@ namespace ContourCheckPlugin
     public class ContourChecker
     {
         // =====================================================================
-        // 功能 1：【纯粹的高程点独立检查】 
+        // 功能 1：高程点检查
         // =====================================================================
         [CommandMethod("CHECK_GCD")]
         public void CheckGcd()
@@ -104,7 +104,7 @@ namespace ContourCheckPlugin
                 return;
             }
 
-            // 阶段二：【高程点计算】 (纯净版，多线程)
+            // 阶段二：高程点计算
             Parallel.ForEach(gcdDTOs, gcd =>
             {
                 Point2d p2d = new Point2d(gcd.Position.X, gcd.Position.Y);
@@ -186,7 +186,7 @@ namespace ContourCheckPlugin
                 if (isError) gcd.IsError = true;
             });
 
-            // 阶段三：【写回图形】 (仅标记异常高程点)
+            // 阶段三：写回图形标记异常高程点
             int gcdErrorCount = 0;
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -201,7 +201,7 @@ namespace ContourCheckPlugin
                     lt.UpgradeOpen();
                     LayerTableRecord ltr = new LayerTableRecord();
                     ltr.Name = "ERROR_POINTS";
-                    ltr.Color = Autodesk.AutoCAD.Colors.Color.FromRgb(210, 160, 255); // 淡紫色
+                    ltr.Color = Autodesk.AutoCAD.Colors.Color.FromRgb(210, 160, 255); //标记颜色
                     errorLayerId = lt.Add(ltr);
                     tr.AddNewlyCreatedDBObject(ltr, true);
                 }
@@ -215,7 +215,7 @@ namespace ContourCheckPlugin
                         BlockReference br = tr.GetObject(gcd.Id, OpenMode.ForWrite) as BlockReference;
                         if (br != null) br.LayerId = errorLayerId;
 
-                        Circle marker = new Circle(gcd.Position, Vector3d.ZAxis,20);
+                        Circle marker = new Circle(gcd.Position, Vector3d.ZAxis, 20);
                         marker.LayerId = errorLayerId;
                         marker.ColorIndex = 256;
                         modelSpace.AppendEntity(marker);
@@ -225,16 +225,16 @@ namespace ContourCheckPlugin
                 tr.Commit();
             }
 
-            // 阶段四：【弹窗展示结果】
+            // 阶段四：弹窗展示结果
             Application.ShowAlertDialog(
                 $"【高程点质检完成】\n\n" +
                 $"共处理高程点: {gcdDTOs.Count} 个\n" +
                 $"发现越界异常点: {gcdErrorCount} 个\n\n" +
-                $"💡 异常点已在图纸上用淡紫色圆圈标记并归入 ERROR_POINTS 图层。");
+                $"异常点已在图纸上用淡紫色圆圈标记并归入 ERROR_POINTS 图层。");
         }
 
         // =====================================================================
-        // 功能 2：【等高线自检 & 纯计算式断线合并】
+        // 功能 2：等高线自检（带断线合并）
         // =====================================================================
         [CommandMethod("CHECK_CONTOUR")]
         public void CheckContour()
@@ -254,7 +254,7 @@ namespace ContourCheckPlugin
                                .Select(s => s.Trim().ToUpper())
             );
 
-            // 等高距仅用于后续的相邻高程差检查
+            // 等高距用于后续的相邻高程差检查
             PromptDoubleOptions pdo = new PromptDoubleOptions("\n请输入固定等高距 (如 2.0): ");
             pdo.DefaultValue = 2.0;
             PromptDoubleResult pdr = ed.GetDouble(pdo);
@@ -266,7 +266,7 @@ namespace ContourCheckPlugin
             List<ContourDTO> contourDTOs = new List<ContourDTO>();
             var magentaPolyIds = new List<ObjectId>();
 
-            // 阶段一：【提取数据并检查小数及零高程】
+            // 阶段一：提取数据并检查小数及零高程
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 BlockTableRecord modelSpace = (BlockTableRecord)tr.GetObject(
@@ -315,7 +315,7 @@ namespace ContourCheckPlugin
                 return;
             }
 
-            // 阶段二：【内存断线计算式缝合 (Virtual Merge)】
+            // 阶段二：内存断线计算式缝合 (Virtual Merge)
             bool hasJoined = true;
             int virtualJoinCount = 0;
 
@@ -378,7 +378,7 @@ namespace ContourCheckPlugin
                 }
             }
 
-            // 阶段三：【多线程检查相邻等高线高差】
+            // 阶段三：多线程检查相邻等高线高差
             object contourLock = new object();
             var contourCyanIds = new List<ObjectId>();
             HashSet<string> reportedPairs = new HashSet<string>();
@@ -427,16 +427,16 @@ namespace ContourCheckPlugin
                 }
             });
 
-            // 阶段四：【纯改色，写回图形 (带有防覆盖逻辑)】
+            // 阶段四：改色，写回图形
             Autodesk.AutoCAD.Colors.Color magentaColor = Autodesk.AutoCAD.Colors.Color.FromRgb(255, 0, 255);
             Autodesk.AutoCAD.Colors.Color cyanColor = Autodesk.AutoCAD.Colors.Color.FromRgb(0, 191, 255);
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                // 用来记录已经变成了洋红色的线段 ID，优先级最高
+                // 存储高程值异常线段id，优先级更高
                 HashSet<ObjectId> coloredMagentaIds = new HashSet<ObjectId>();
 
-                // 1. 优先涂洋红色 (高程为 0 或有小数属于绝对异常，优先展示)
+                // 优先涂洋红色 (高程为 0 或有小数属于绝对异常，优先展示)
                 foreach (ObjectId id in magentaPolyIds.Distinct())
                 {
                     Entity ent = tr.GetObject(id, OpenMode.ForWrite) as Entity;
@@ -462,13 +462,12 @@ namespace ContourCheckPlugin
             // 阶段五：【弹窗展示结果】
             Application.ShowAlertDialog(
                 $"【等高线自检完成】\n\n" +
-                $"✅ 成功在内存中计算式缝合断线: {virtualJoinCount} 处\n\n" +
-                $"1. 高程为 0 或带有小数 (洋红高亮优先): {magentaPolyIds.Distinct().Count()} 处\n" +
-                $"2. 相邻高程差不符规则 (天蓝高亮): {diffErrorCount} 处\n\n" +
-                $"💡 异常线段已全部在图纸中直接变色高亮。");
+                $"1. 高程为 0 或带有小数 (洋红色): {magentaPolyIds.Distinct().Count()} 处\n" +
+                $"2. 相邻高程差不符规则 (天蓝色): {diffErrorCount} 处\n\n" +
+                $"异常线段已全部在图纸中标记。");
         }
 
-        #region 纯 C# 高性能几何计算辅助算法 (供双模块复用)
+        #几何计算辅助算法
         private static double FastGetClosestDistance(Point2d pt, List<Point2d> poly)
         {
             FastGetClosestPoint(pt, poly, out double dist);
